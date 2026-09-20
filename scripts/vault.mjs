@@ -140,8 +140,11 @@ if (cmd === "notes") {
     for (const k of new Set([...(vault ? Object.keys(vault) : []), ...keys, ...Object.keys(existing), ...Object.keys(example)])) {
       if (isNote(k)) continue;
       const pinned = example[k]?.startsWith("REPLACE_") ? example[k] : null;
-      const v = pinned ?? vault?.[k] ?? process.env[k] ?? existing[k] ?? example[k];
-      if (v !== undefined && v !== "") merged[k] = v;
+      let v = pinned ?? vault?.[k] ?? process.env[k] ?? existing[k] ?? example[k];
+      // A manifest key with no value anywhere is still written as `KEY=` so
+      // `wrangler types` declares it on Env and the type gate passes without the vault.
+      if ((v === undefined || v === "") && (keys.includes(k) || k in example)) v = "";
+      if (v !== undefined) merged[k] = v;
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
     const header = `# Written by scripts/vault.mjs from Infisical ${vaultEnv}${vaultPath} (${vault ? "vault" : `no vault: ${reason}; environment, previous and example values`}). Do not commit.\n`;
