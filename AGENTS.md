@@ -30,5 +30,6 @@ Changing a default rate, a horizon, or the model itself needs a human review:
 PR it with before and after, and wait. Nothing here may claim to be financial
 advice or promise a return. Spending money, DNS, the Vercel project, and what
 the GitHub token may do are Maddox's call: prepare it, then ask in #agents.
-Credentials come from the vault and the environment, never from an
+Credentials come from the Infisical vault through `scripts/vault.mjs`
+(`env:pull`, `with-secrets`, `env:notes`) and the environment, never from an
 interactive login.
