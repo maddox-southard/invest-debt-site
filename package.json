@@ -7,7 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "deploy": "railway up"
+    "deploy": "railway up",
+    "env:pull": "node scripts/vault.mjs pull --force",
+    "env:check": "node scripts/vault.mjs check",
+    "with-secrets": "node scripts/vault.mjs run --",
+    "env:notes": "node scripts/vault.mjs notes"
   },
   "dependencies": {
     "@radix-ui/react-alert-dialog": "^1.0.5",

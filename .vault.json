@@ -1,0 +1,13 @@
+{
+  "env": "dev",
+  "runPath": "/",
+  "files": {
+    ".env": {
+      "path": "/",
+      "keys": [
+        "GITHUB_API_TOKEN"
+      ]
+    }
+  },
+  "notes": []
+}

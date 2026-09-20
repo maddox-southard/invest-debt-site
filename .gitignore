@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# secrets live in the Infisical vault (scripts/vault.mjs); never commit these
+CREDENTIALS.md
+credentials.md
+credentials/
+.env
+.env.*
+.dev.vars
+.dev.vars.*
+!.env.example
+!.dev.vars.example
