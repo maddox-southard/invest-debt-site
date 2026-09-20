@@ -8,7 +8,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'GitHub token not configured' }, { status: 500 });
   }
 
-  const response = await fetch('https://api.github.com/repos/maddox-southard/invest-vs-debt/issues', {
+  // Repo was renamed from invest-vs-debt. Keep this current: GitHub answers the
+  // old name with a 301, and fetch turns the redirected POST into a GET.
+  const response = await fetch('https://api.github.com/repos/maddox-southard/invest-debt-site/issues', {
     method: 'POST',
     headers: {
       'Authorization': `token ${process.env.GITHUB_API_TOKEN}`,

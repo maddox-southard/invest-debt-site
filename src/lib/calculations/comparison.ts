@@ -1,3 +1,35 @@
+/**
+ * The model. Everything the chart and the recommendation show comes from the
+ * three files in this folder plus `src/lib/recommendation.ts`; components only
+ * render what these return. Assumptions the code makes today (keep this list
+ * honest when you change the math):
+ *
+ * - Rates are nominal annual percentages compounded monthly, for both the debt
+ *   and the investment: monthly rate = APR / 100 / 12.
+ * - The minimum payment is converted to a monthly equivalent (weekly x 52/12,
+ *   bi-weekly x 26/12, quarterly / 3, annually / 12). The default minimum in
+ *   `src/app/page.tsx` is the 30-year amortizing payment for the balance.
+ * - The extra payment is treated as a monthly amount. The frequency chosen in
+ *   `CashFlowInputForm` (including "lump-sum") is collected but not yet used
+ *   in the math. Gotcha, not a feature.
+ * - Investment contributions land at the start of each month and then earn
+ *   that month's growth; the starting value is the user's current investment.
+ * - The chart is one scenario, "invest the extra": debt paid with minimums
+ *   only (red) beside investments growing with the extra (green). Paying the
+ *   extra toward the debt is computed only for the payoff milestone.
+ * - Horizon: max(minimum-only payoff months, 120). Growth is projected for
+ *   max(ceil(payoff months / 12), 10) years.
+ * - Crossover = first month the investment balance exceeds the remaining debt.
+ *   Coverage = first month balance x rate / 12 covers the monthly minimum.
+ * - If a payment cannot cover the first month's interest, `debt.ts` shows the
+ *   balance growing for 30 years; otherwise amortization stops at 50 years.
+ * - The recommendation (`recommendation.ts`) compares the two rates only:
+ *   invest if return > APR. Confidence is low up to a 2-point spread, medium
+ *   up to 5, high above. Taxes, risk and inflation are not modeled; the UI
+ *   names them as considerations.
+ * - Defaults (`page.tsx`): $100,000 at 5.0% APR, 7.5% return, $0 invested,
+ *   $250 extra monthly. Inputs persist in localStorage under the `*-v2` keys.
+ */
 import { Debt, calculateAmortization } from "./debt";
 import { calculateInvestmentGrowth } from "./investment";
 import { Investment } from "@/components/InvestmentInputForm";
