@@ -1,0 +1,24 @@
+{
+  "name": "invest-debt-site",
+  "user": "ubuntu",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "install": "npm ci",
+  "start": "node scripts/vault.mjs pull --force",
+  "terminals": [
+    {
+      "name": "site",
+      "description": "Next.js dev server for investvsdebt.com on http://localhost:3000.",
+      "command": "npm run dev"
+    }
+  ],
+  "ports": [
+    {
+      "name": "next dev",
+      "port": 3000
+    }
+  ],
+  "disableAllMcpServers": true
+}
