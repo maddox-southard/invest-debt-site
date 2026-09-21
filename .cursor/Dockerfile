@@ -15,7 +15,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends \
-      git sudo curl ca-certificates gnupg jq dnsutils openssl unzip \
+      git sudo curl ca-certificates gnupg jq dnsutils openssl unzip tmux ripgrep procps \
       python3 python3-venv python3-pip \
  && mkdir -p -m 755 /etc/apt/keyrings \
  && curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
