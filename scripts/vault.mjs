@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Everything secret comes from the Infisical vault. Shared verbatim across NSMBL repos.
 //
-//   node scripts/vault.mjs pull [--force] [--shell]  write the env files in .vault.json; in a cloud VM
+//   node scripts/vault.mjs pull [--force] [--shell] [--require-vault]
+//                                                    write the env files in .vault.json; in a cloud VM
 //                                                    (or with --shell) also export the tooling tokens
 //                                                    (GH_TOKEN, VERCEL_TOKEN, …) into the login shell
 //   node scripts/vault.mjs check                     which keys have a value where (never prints values)
@@ -19,8 +20,12 @@
 // `infisical login` session. Those two identity values are the only secrets a
 // Cursor Cloud environment needs. With no vault access at all, `pull` falls
 // back to process.env, then to the `<file>.example` value, so a Build without
-// the identity still gets a usable file. A `<file>.example` value starting
-// with REPLACE_ pins that key to the placeholder so dev stays inert.
+// the identity still gets a usable file; keys declared in `<file>.example`
+// are written as `KEY=` so `wrangler types` sees their names, other missing
+// keys are left out so app defaults apply. `--require-vault` exits 3 instead
+// of falling back, for callers with their own placeholder strategy. A
+// `<file>.example` value starting with REPLACE_ pins that key to the
+// placeholder so dev stays inert.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -31,6 +36,8 @@ const ENV = { ...process.env, INFISICAL_DISABLE_UPDATE_CHECK: "true" };
 const args = process.argv.slice(2);
 const cmd = args[0];
 const force = args.includes("--force");
+const requireVault = args.includes("--require-vault");
+let vaultMisses = 0;
 
 const config = readJson(path.join(ROOT, ".vault.json"));
 const projectId = readJson(path.join(ROOT, ".infisical.json"))?.workspaceId;
@@ -135,6 +142,7 @@ if (cmd === "notes") {
     const existing = parseEnvFile(file);
     if (Object.keys(existing).length && !force) { console.log(`${rel}: exists, kept (use --force to overwrite)`); continue; }
     const { vault, reason } = vaultFor(projectId, vaultPath);
+    if (!vault) vaultMisses++;
     const example = parseEnvFile(`${file}.example`);
     const merged = {};
     for (const k of new Set([...(vault ? Object.keys(vault) : []), ...keys, ...Object.keys(existing), ...Object.keys(example)])) {
@@ -143,7 +151,7 @@ if (cmd === "notes") {
       let v = pinned ?? vault?.[k] ?? process.env[k] ?? existing[k] ?? example[k];
       // A manifest key with no value anywhere is still written as `KEY=` so
       // `wrangler types` declares it on Env and the type gate passes without the vault.
-      if ((v === undefined || v === "") && (keys.includes(k) || k in example)) v = "";
+      if ((v === undefined || v === "") && k in example) v = "";
       if (v !== undefined) merged[k] = v;
     }
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -151,6 +159,7 @@ if (cmd === "notes") {
     fs.writeFileSync(file, header + Object.entries(merged).map(([k, v]) => `${k}=${quote(v)}`).join("\n") + "\n");
     console.log(`${rel}: ${Object.keys(merged).length} keys from ${vault ? "vault" : `fallbacks (${reason})`}`);
   }
+  if (requireVault && vaultMisses) { console.error(`vault unreachable for ${vaultMisses} file(s) and --require-vault was set`); process.exit(3); }
   if ((tooling || shellKeys.length) && (inCloudVm || args.includes("--shell"))) {
     const { vault, reason } = tooling ? toolingSecrets() : { vault: {}, reason: null };
     if (vault) {
