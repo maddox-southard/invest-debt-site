@@ -6,7 +6,7 @@
     "context": ".."
   },
   "install": "npm ci",
-  "start": "node scripts/vault.mjs pull --force",
+  "start": "node scripts/vault.mjs pull --force --require-vault",
   "terminals": [
     {
       "name": "site",
