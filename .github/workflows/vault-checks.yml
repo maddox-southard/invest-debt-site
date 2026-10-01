@@ -1,0 +1,32 @@
+name: Vault helper checks
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/*vault*.mjs'
+      - '.vault.json'
+      - '.infisical.json'
+      - '.cursor/environment.json'
+      - '.github/workflows/vault-checks.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/*vault*.mjs'
+      - '.vault.json'
+      - '.infisical.json'
+      - '.cursor/environment.json'
+      - '.github/workflows/vault-checks.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  vault:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Fixtures use synthetic values and a fake CLI; no vault credentials needed.
+      - run: node --test scripts/*vault*.test.mjs
