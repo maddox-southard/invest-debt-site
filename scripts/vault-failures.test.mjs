@@ -27,6 +27,7 @@ if (args[0] === '--version') { console.log('fake'); process.exit(0); }
 if (args.some(a => a.startsWith('--token='))) { console.error('SENSITIVE_TOKEN_ARGUMENT'); process.exit(1); }
 if (${JSON.stringify(fail)} === 'login' && args[0] === 'login') { console.error('SENSITIVE_FAILURE'); process.exit(1); }
 if (args[0] === 'login') { console.log('synthetic-token'); process.exit(0); }
+if (args[0] === 'export' && process.env.INFISICAL_TOKEN !== 'synthetic-token') { console.error('SENSITIVE_MISSING_TOKEN'); process.exit(1); }
 if (${JSON.stringify(fail)} === project || (${JSON.stringify(fail)} === 'second-folder' && folder === '/second')) { console.error('SENSITIVE_FAILURE'); process.exit(1); }
 console.log(JSON.stringify(project === 'tooling-project' ? (${emptyTooling} ? {} : { TOOL_KEY: 'synthetic-tool' }) : { APP_KEY: 'synthetic-app' }));
 `, { mode: 0o700 });
