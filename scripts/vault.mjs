@@ -54,8 +54,8 @@ const inCloudVm = process.platform === "linux" && os.userInfo().username === "ub
 function readJson(p) {
   try { return JSON.parse(fs.readFileSync(p, "utf8")); } catch { return null; }
 }
-function cli(cliArgs) {
-  return spawnSync("infisical", cliArgs, { env: ENV, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
+function cli(cliArgs, credentials = {}) {
+  return spawnSync("infisical", cliArgs, { env: { ...ENV, ...credentials }, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000 });
 }
 let cachedToken;
 function token() {
@@ -63,24 +63,36 @@ function token() {
   if (process.env.INFISICAL_TOKEN) return (cachedToken = process.env.INFISICAL_TOKEN);
   if (!process.env.INFISICAL_UNIVERSAL_AUTH_CLIENT_ID || !process.env.INFISICAL_UNIVERSAL_AUTH_CLIENT_SECRET) return (cachedToken = null);
   const r = cli(["login", "--method=universal-auth", "--plain", "--silent"]);
-  if (r.status !== 0) throw new Error(`infisical universal-auth login failed: ${(r.stderr || "").trim()}`);
+  if (r.status !== 0 || !r.stdout?.trim()) throw new Error("Infisical machine authentication failed");
   return (cachedToken = r.stdout.trim());
 }
 function exportSecrets(pid, vaultPath) {
   const a = ["export", "--format=json", `--projectId=${pid}`, `--env=${vaultEnv}`, `--path=${vaultPath}`];
   const t = token();
-  if (t) a.push(`--token=${t}`);
-  const r = cli(a);
-  if (r.status !== 0) throw new Error((r.stderr || r.stdout || "infisical export failed").trim().split("\n")[0]);
-  const parsed = JSON.parse(r.stdout);
+  // Keep access tokens out of process arguments and diagnostics.
+  const r = cli(a, t ? { INFISICAL_TOKEN: t } : {});
+  if (r.status !== 0) throw new Error("Infisical export failed (check machine identity permissions and environment)");
+  let parsed;
+  try { parsed = JSON.parse(r.stdout); } catch { throw new Error("Infisical returned invalid JSON"); }
   return Array.isArray(parsed) ? Object.fromEntries(parsed.map((s) => [s.key ?? s.Key, s.value ?? s.Value])) : parsed;
 }
+// Cache each source so strict preflight and the write phase use the same read.
+const vaultReads = new Map();
 function vaultFor(pid, vaultPath) {
-  if (!pid) return { vault: null, reason: "no project id" };
-  if (spawnSync("infisical", ["--version"], { stdio: "ignore" }).status !== 0) return { vault: null, reason: "infisical CLI not installed" };
-  try { return { vault: exportSecrets(pid, vaultPath), reason: null }; }
-  catch (e) { return { vault: null, reason: token() ? e.message : `not logged in (${e.message})` }; }
+  const key = JSON.stringify([pid, vaultPath]);
+  if (vaultReads.has(key)) return vaultReads.get(key);
+  let result;
+  if (!pid) result = { vault: null, reason: "no project id" };
+  else if (spawnSync("infisical", ["--version"], { stdio: "ignore" }).status !== 0)
+    result = { vault: null, reason: "infisical CLI not installed" };
+  else {
+    try { result = { vault: exportSecrets(pid, vaultPath), reason: null }; }
+    catch (error) { result = { vault: null, reason: error.message }; }
+  }
+  vaultReads.set(key, result);
+  return result;
 }
+
 function parseEnvFile(p) {
   const out = {};
   if (!fs.existsSync(p)) return out;
@@ -135,6 +147,28 @@ if (cmd === "notes") {
     console.log(parts.map((k) => vault[k]).join(""));
   }
 } else if (cmd === "pull") {
+  // Preflight every required source before writing any files. An inaccessible
+  // tooling vault is a setup failure, even in projects with no runtime files.
+  if (requireVault) {
+    const paths = new Set(Object.values(files).map(spec => typeof spec === "string" ? spec : spec.path));
+    if (!paths.size) paths.add(config.runPath ?? "/");
+    if (shellKeys.length) paths.add("/");
+    for (const vaultPath of paths) {
+      const result = vaultFor(projectId, vaultPath);
+      if (!result.vault) {
+        console.error(`project vault unavailable (${vaultEnv}${vaultPath}): ${result.reason}; no files were written`);
+        process.exit(3);
+      }
+    }
+    if (tooling) {
+      const result = toolingSecrets();
+      if (!result.vault || !Object.keys(result.vault).some(key => !isNote(key))) {
+        console.error(`tooling vault unavailable (${vaultEnv}${tooling.path ?? "/"}): ${result.reason ?? "empty vault"}; no files were written`);
+        process.exit(3);
+      }
+    }
+  }
+
   for (const [rel, spec] of Object.entries(files)) {
     const file = path.join(ROOT, rel);
     const vaultPath = typeof spec === "string" ? spec : spec.path;
@@ -170,12 +204,17 @@ if (cmd === "notes") {
   }
 } else if (cmd === "check") {
   let missing = 0;
+  if (!Object.keys(files).length) {
+    const result = vaultFor(projectId, config.runPath ?? "/");
+    if (!result.vault) { console.error(`project vault unavailable: ${result.reason}`); missing++; }
+  }
   for (const [rel, spec] of Object.entries(files)) {
     const file = path.join(ROOT, rel);
     const vaultPath = typeof spec === "string" ? spec : spec.path;
     const keys = typeof spec === "string" ? [] : spec.keys ?? [];
     const { vault, reason } = vaultFor(projectId, vaultPath);
     const local = parseEnvFile(file);
+    if (!vault) missing++;
     console.log(`${rel}  (vault ${vaultEnv}${vaultPath}: ${vault ? `${Object.keys(vault).filter((k) => !isNote(k)).length} keys` : reason})`);
     for (const k of new Set([...keys, ...(vault ? Object.keys(vault) : [])])) {
       if (isNote(k)) continue;
@@ -186,6 +225,7 @@ if (cmd === "notes") {
   }
   if (tooling) {
     const { vault, reason } = toolingSecrets();
+    if (!vault || !Object.keys(vault).some(key => !isNote(key))) missing++;
     console.log(`tooling  (vault ${vaultEnv}${tooling.path ?? "/"}: ${vault ? `${Object.keys(vault).length} tokens` : reason})`);
     for (const k of Object.keys(vault ?? {})) console.log(`  ok  ${k}  (vault${process.env[k] ? ", env" : ""})`);
   }
@@ -197,7 +237,13 @@ if (cmd === "notes") {
   if (!userCmd.length) { console.error("usage: vault.mjs run [--path=/x] -- <cmd>"); process.exit(2); }
   const repo = vaultFor(projectId, pathArg);
   if (!repo.vault) { console.error(`vault unavailable: ${repo.reason}`); process.exit(1); }
-  const tool = tooling ? toolingSecrets().vault ?? {} : {};
+  // Never launch a child with an incomplete, silently substituted vault scope.
+  const shared = tooling ? toolingSecrets() : { vault: {}, reason: null };
+  if (!shared.vault || (tooling && !Object.keys(shared.vault).some(key => !isNote(key)))) {
+    console.error(`tooling vault unavailable: ${shared.reason ?? "empty vault"}`);
+    process.exit(1);
+  }
+  const tool = shared.vault;
   const env = { ...process.env };
   for (const [k, v] of Object.entries({ ...tool, ...repo.vault })) if (!isNote(k) && env[k] === undefined) env[k] = v;
   const r = spawnSync(userCmd[0], userCmd.slice(1), { env, stdio: "inherit" });
