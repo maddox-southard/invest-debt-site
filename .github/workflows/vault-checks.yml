@@ -2,20 +2,14 @@ name: Vault helper checks
 
 on:
   pull_request:
+    types: [ready_for_review]
     paths:
       - 'scripts/*vault*.mjs'
       - '.vault.json'
       - '.infisical.json'
       - '.cursor/environment.json'
       - '.github/workflows/vault-checks.yml'
-  push:
-    branches: [main]
-    paths:
-      - 'scripts/*vault*.mjs'
-      - '.vault.json'
-      - '.infisical.json'
-      - '.cursor/environment.json'
-      - '.github/workflows/vault-checks.yml'
+  workflow_dispatch:
 
 permissions:
   contents: read
