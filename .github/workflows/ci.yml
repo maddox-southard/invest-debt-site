@@ -1,12 +1,10 @@
-# Type gate on every PR and on main: what a human runs before a deploy.
-# Vercel (project invest-vs-debt) deploys main. This gives cloud agents a red/green signal for their own PRs
-# and is the required status check for auto-merge into main.
+# Check finished pull requests once before merge. Draft edits use local verification.
 name: ci
 
 on:
   pull_request:
-  push:
-    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,6 +12,7 @@ concurrency:
 
 jobs:
   check:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
