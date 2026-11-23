@@ -7,11 +7,14 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A delayed draft event must not cancel verification for a ready review.
+  group: ci-${{ github.ref }}-${{ github.event.pull_request.draft || false }}
   cancel-in-progress: true
 
 jobs:
   check:
+    # A skipped draft must never satisfy the required check on this commit.
+    name: ${{ github.event.pull_request.draft && 'Draft (local verification)' || 'check' }}
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
